@@ -396,13 +396,16 @@ Nothing the renderer calls was introduced by Vulkan 1.4, so 1.3 is the floor:
 | `vkGetPhysicalDeviceFeatures2`, `vkGetPhysicalDeviceProperties2` | 1.1 |
 | `descriptorBindingPartiallyBound`, `descriptorBindingSampledImageUpdateAfterBind`, `descriptorBindingUpdateUnusedWhilePending`; 8192 update-after-bind sampled images per stage and per set, and that many update-after-bind resources per stage | 1.2 (descriptor indexing) |
 | `dynamicRendering` (`vkCmdBeginRendering`, `VkPipelineRenderingCreateInfo`) | 1.3 feature |
-| `synchronization2` (`vkCmdPipelineBarrier2`, `vkQueueSubmit2`, the `*_2` stages and accesses) | 1.3 feature |
+| `synchronization2` (`vkCmdPipelineBarrier2` and the `*_2` stages and accesses) | 1.3 feature |
 | Cull mode, front face, topology, depth test/write/compare, stencil test and ops as dynamic state | 1.3 core (no feature bit) |
 | `D32_SFLOAT_S8_UINT` or `D24_UNORM_S8_UINT` as an attachment that copies both ways | format support |
 | `maxPushConstantsSize` of 56 bytes | 1.0 limit (128 guaranteed) |
 | `VK_KHR_swapchain` and a graphics queue that presents to the window | not when offscreen |
 
 Optional, used when present:
+
+Android submits command buffers with `vkQueueSubmit` while continuing to use synchronization2 barriers.
+This avoids the `vkQueueSubmit2` path implicated in a Samsung screen-recording `VK_ERROR_DEVICE_LOST`.
 
 - `VK_EXT_extended_dynamic_state3` with `extendedDynamicState3ColorWriteMask` (below); without it
   the colourless pipelines are added. Chosen by the device's capability, and

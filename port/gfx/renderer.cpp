@@ -430,7 +430,6 @@ void CreateDevice() {
         Fatal("missing Vulkan device function: %s", #proc);                                                       \
     }
     LOAD_DEVICE_PROC(cmd_pipeline_barrier2, vkCmdPipelineBarrier2)
-    LOAD_DEVICE_PROC(queue_submit2, vkQueueSubmit2)
     LOAD_DEVICE_PROC(cmd_begin_rendering, vkCmdBeginRendering)
     LOAD_DEVICE_PROC(cmd_end_rendering, vkCmdEndRendering)
     LOAD_DEVICE_PROC(cmd_set_cull_mode, vkCmdSetCullMode)
@@ -744,6 +743,28 @@ void Submit(bool with_draw, VkSemaphore wait, VkSemaphore signal) {
         commands.push_back({VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, frame.draw_cmd, 0});
     }
 
+    Check(vkResetFences(g.device, 1, &frame.fence), "vkResetFences");
+#ifdef __ANDROID__
+    // The Galaxy Fold recording trace ended with VK_ERROR_DEVICE_LOST from vkQueueSubmit2.
+    // Use the equivalent legacy submit path on Android as a driver-workaround test while
+    // retaining synchronization2 for barriers and dynamic rendering.
+    std::vector<VkCommandBuffer> command_buffers;
+    command_buffers.reserve(commands.size());
+    for (const VkCommandBufferSubmitInfo &command : commands) {
+        command_buffers.push_back(command.commandBuffer);
+    }
+    VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    VkSubmitInfo submit = {};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.waitSemaphoreCount = wait != VK_NULL_HANDLE ? 1 : 0;
+    submit.pWaitSemaphores = &wait;
+    submit.pWaitDstStageMask = &wait_stage;
+    submit.commandBufferCount = static_cast<uint32_t>(command_buffers.size());
+    submit.pCommandBuffers = command_buffers.data();
+    submit.signalSemaphoreCount = signal != VK_NULL_HANDLE ? 1 : 0;
+    submit.pSignalSemaphores = &signal;
+    Check(Timed(TimedOp::QueueSubmit, [&] { return vkQueueSubmit(g.queue, 1, &submit, frame.fence); }), "vkQueueSubmit");
+#else
     VkSemaphoreSubmitInfo wait_info = {};
     wait_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
     wait_info.semaphore = wait;
@@ -752,7 +773,6 @@ void Submit(bool with_draw, VkSemaphore wait, VkSemaphore signal) {
     signal_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
     signal_info.semaphore = signal;
     signal_info.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-
     VkSubmitInfo2 submit = {};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submit.waitSemaphoreInfoCount = wait != VK_NULL_HANDLE ? 1 : 0;
@@ -761,10 +781,6 @@ void Submit(bool with_draw, VkSemaphore wait, VkSemaphore signal) {
     submit.pCommandBufferInfos = commands.data();
     submit.signalSemaphoreInfoCount = signal != VK_NULL_HANDLE ? 1 : 0;
     submit.pSignalSemaphoreInfos = &signal_info;
-    Check(vkResetFences(g.device, 1, &frame.fence), "vkResetFences");
-#ifdef __ANDROID__
-    Check(Timed(TimedOp::QueueSubmit, [&] { return g.queue_submit2(g.queue, 1, &submit, frame.fence); }), "vkQueueSubmit2");
-#else
     Check(vkQueueSubmit2(g.queue, 1, &submit, frame.fence), "vkQueueSubmit2");
 #endif
     frame.pending = true;
@@ -853,13 +869,20 @@ void RunOneShot(const std::function<void(VkCommandBuffer)> &record) {
     VkFenceCreateInfo fence_info = {};
     fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     Check(vkCreateFence(g.device, &fence_info, nullptr, &fence), "vkCreateFence");
+#ifdef __ANDROID__
+    VkSubmitInfo submit = {};
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1;
+    submit.pCommandBuffers = &cmd;
+#else
     VkCommandBufferSubmitInfo command = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, cmd, 0};
     VkSubmitInfo2             submit = {};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
     submit.commandBufferInfoCount = 1;
     submit.pCommandBufferInfos = &command;
+#endif
 #ifdef __ANDROID__
-    Check(g.queue_submit2(g.queue, 1, &submit, fence), "vkQueueSubmit2");
+    Check(vkQueueSubmit(g.queue, 1, &submit, fence), "vkQueueSubmit");
 #else
     Check(vkQueueSubmit2(g.queue, 1, &submit, fence), "vkQueueSubmit2");
 #endif

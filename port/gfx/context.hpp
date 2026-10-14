@@ -277,7 +277,6 @@ struct Context {
     PFN_vkCmdSetColorWriteMaskEXT cmd_set_color_write_mask = nullptr;
 #ifdef __ANDROID__
     PFN_vkCmdPipelineBarrier2 cmd_pipeline_barrier2 = nullptr;
-    PFN_vkQueueSubmit2 queue_submit2 = nullptr;
     PFN_vkCmdBeginRendering cmd_begin_rendering = nullptr;
     PFN_vkCmdEndRendering cmd_end_rendering = nullptr;
     PFN_vkCmdSetCullMode cmd_set_cull_mode = nullptr;
