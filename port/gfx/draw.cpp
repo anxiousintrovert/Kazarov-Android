@@ -85,7 +85,15 @@ void EnsureRendering(Target &target) {
     info.pColorAttachments = &color;
     info.pDepthAttachment = &depth;
     info.pStencilAttachment = &depth;
+#ifdef __ANDROID__
+    g.cmd_begin_rendering(cmd, &info);
+#else
+#ifdef __ANDROID__
+    g.cmd_begin_rendering(cmd, &info);
+#else
     vkCmdBeginRendering(cmd, &info);
+#endif
+#endif
     g.rendering = true;
 
     VkViewport viewport = {
@@ -151,8 +159,18 @@ void SetStencilFace(VkCommandBuffer cmd, uint32_t index, const StencilFace &face
     int                ops = PackStencilOps(face);
     if (g.bound.stencil_ops[index] != ops) {
         g.bound.stencil_ops[index] = ops;
+#ifdef __ANDROID__
+        g.cmd_set_stencil_op(cmd, flags, StencilOpOf(face.fail), StencilOpOf(face.pass),
+                             StencilOpOf(face.depth_fail), static_cast<VkCompareOp>(face.compare));
+#else
+#ifdef __ANDROID__
+        g.cmd_set_stencil_op(cmd, flags, StencilOpOf(face.fail), StencilOpOf(face.pass),
+                             StencilOpOf(face.depth_fail), static_cast<VkCompareOp>(face.compare));
+#else
         vkCmdSetStencilOp(cmd, flags, StencilOpOf(face.fail), StencilOpOf(face.pass), StencilOpOf(face.depth_fail),
                           static_cast<VkCompareOp>(face.compare));
+#endif
+#endif
     }
     if (g.bound.stencil_reference[index] != masks.reference) {
         g.bound.stencil_reference[index] = masks.reference;
@@ -211,7 +229,12 @@ VkRect2D ClearArea(const LogicalRect *rect, const Target &target) {
                                {0,                          0                          },
                                {target.mapping.pixel_width, target.mapping.pixel_height}
     };
-    return ClipsToFrame(g.target) ? Intersect(area, FramePixels(target.mapping)) : area;
+    // Host letterbox bars are cleared outside the logical game frame. Do not clip an
+    // explicit clear that lies entirely in a bar back to the game frame.
+    const bool outside_frame = rect != nullptr &&
+        (rect->x + rect->w <= 0.0f || rect->x >= g.config.logical_width ||
+         rect->y + rect->h <= 0.0f || rect->y >= g.config.logical_height);
+    return ClipsToFrame(g.target) && !outside_frame ? Intersect(area, FramePixels(target.mapping)) : area;
 }
 
 // The pixels an anchored UI draw moves by: on each anchored axis, from the UI frame's edge to the
@@ -359,9 +382,21 @@ bool Prepare(PipelineFamily family, VkPrimitiveTopology topology, const TextureB
     int cull = static_cast<int>(state.cull);
     if (g.bound.cull != cull) {
         g.bound.cull = cull;
+#ifdef __ANDROID__
+        g.cmd_set_cull_mode(cmd, state.cull == CullMode::None   ? VK_CULL_MODE_NONE
+                                                               : state.cull == CullMode::Back ? VK_CULL_MODE_BACK_BIT
+                                                                                              : VK_CULL_MODE_FRONT_BIT);
+#else
+#ifdef __ANDROID__
+        g.cmd_set_cull_mode(cmd, state.cull == CullMode::None   ? VK_CULL_MODE_NONE
+                                                               : state.cull == CullMode::Back ? VK_CULL_MODE_BACK_BIT
+                                                                                              : VK_CULL_MODE_FRONT_BIT);
+#else
         vkCmdSetCullMode(cmd, state.cull == CullMode::None   ? VK_CULL_MODE_NONE
                               : state.cull == CullMode::Back ? VK_CULL_MODE_BACK_BIT
                                                              : VK_CULL_MODE_FRONT_BIT);
+#endif
+#endif
     }
     // An always-passing test that writes nothing is the same as no test, and cheaper.
     int test = state.depth_test == DepthTest::Always && !state.depth_write ? 0 : 1;
@@ -369,20 +404,52 @@ bool Prepare(PipelineFamily family, VkPrimitiveTopology topology, const TextureB
     int op = static_cast<int>(DepthOp(state.depth_test));
     if (g.bound.depth_test != test) {
         g.bound.depth_test = test;
+#ifdef __ANDROID__
+        g.cmd_set_depth_test_enable(cmd, test);
+#else
+#ifdef __ANDROID__
+        g.cmd_set_depth_test_enable(cmd, test);
+#else
         vkCmdSetDepthTestEnable(cmd, test);
+#endif
+#endif
     }
     if (g.bound.depth_write != write) {
         g.bound.depth_write = write;
+#ifdef __ANDROID__
+        g.cmd_set_depth_write_enable(cmd, write);
+#else
+#ifdef __ANDROID__
+        g.cmd_set_depth_write_enable(cmd, write);
+#else
         vkCmdSetDepthWriteEnable(cmd, write);
+#endif
+#endif
     }
     if (g.bound.depth_op != op) {
         g.bound.depth_op = op;
+#ifdef __ANDROID__
+        g.cmd_set_depth_compare_op(cmd, static_cast<VkCompareOp>(op));
+#else
+#ifdef __ANDROID__
+        g.cmd_set_depth_compare_op(cmd, static_cast<VkCompareOp>(op));
+#else
         vkCmdSetDepthCompareOp(cmd, static_cast<VkCompareOp>(op));
+#endif
+#endif
     }
     int stencil = state.stencil_test ? 1 : 0;
     if (g.bound.stencil_test != stencil) {
         g.bound.stencil_test = stencil;
+#ifdef __ANDROID__
+        g.cmd_set_stencil_test_enable(cmd, stencil);
+#else
+#ifdef __ANDROID__
+        g.cmd_set_stencil_test_enable(cmd, stencil);
+#else
         vkCmdSetStencilTestEnable(cmd, stencil);
+#endif
+#endif
     }
     // The pipelines declare every stencil parameter dynamic, so each must be set once before
     // the first draw even while the test is off.
@@ -411,7 +478,15 @@ bool Prepare(PipelineFamily family, VkPrimitiveTopology topology, const TextureB
     }
     if (g.bound.topology != static_cast<int>(topology)) {
         g.bound.topology = static_cast<int>(topology);
+#ifdef __ANDROID__
+        g.cmd_set_primitive_topology(cmd, topology);
+#else
+#ifdef __ANDROID__
+        g.cmd_set_primitive_topology(cmd, topology);
+#else
         vkCmdSetPrimitiveTopology(cmd, topology);
+#endif
+#endif
     }
     VkRect2D scissor = state.scissor ? PixelRect(mapping, ExtendClearRect(ScissorRect(state.scissor_rect), mapping),
                                                  side.scissor ? dx : 0.0f, side.scissor ? dy : 0.0f)
@@ -419,7 +494,7 @@ bool Prepare(PipelineFamily family, VkPrimitiveTopology topology, const TextureB
                                            {0,                   0                   },
                                            {mapping.pixel_width, mapping.pixel_height}
     };
-    if (ClipsToFrame(g.target)) {
+    if (ClipsToFrame(g.target) && !g.host_draws) {
         scissor = Intersect(scissor, FramePixels(target.mapping));
     }
     if (!SameRect(g.bound.scissor, scissor)) {
@@ -896,7 +971,15 @@ LogicalRect ExtendRect(LogicalRect rect, uint32_t axes, const LogicalRect &frame
 
 void EndRendering() {
     if (g.rendering) {
+#ifdef __ANDROID__
+        g.cmd_end_rendering(DrawCommands());
+#else
+#ifdef __ANDROID__
+        g.cmd_end_rendering(DrawCommands());
+#else
         vkCmdEndRendering(DrawCommands());
+#endif
+#endif
         g.rendering = false;
     }
 }
@@ -906,7 +989,15 @@ void ResetDrawState() {
     VkCommandBuffer cmd = DrawCommands();
     vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, g.pipeline_layout, 0, 1, &g.texture_set, 0,
                             nullptr);
+#ifdef __ANDROID__
+    g.cmd_set_front_face(cmd, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+#else
+#ifdef __ANDROID__
+    g.cmd_set_front_face(cmd, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+#else
     vkCmdSetFrontFace(cmd, VK_FRONT_FACE_COUNTER_CLOCKWISE);
+#endif
+#endif
 }
 
 void ReleaseTarget() {

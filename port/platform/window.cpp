@@ -15,6 +15,7 @@ namespace {
 
 SDL_Window                              *g_window = nullptr;
 bool                                     g_headless = false;
+bool                                     g_fixed_display = false;
 bool                                     g_mode_event = false;
 std::vector<void (*)(const SDL_Event &)> g_hooks;
 WindowIdentity                          g_identity;
@@ -60,7 +61,11 @@ void WindowSetIdentity(const WindowIdentity &identity) { g_identity = identity; 
 
 void WindowInit(const WindowConfig &config) {
     SDL_SetAppMetadata(g_identity.title, nullptr, g_identity.app_id);
+#ifdef __ANDROID__
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
+#endif
     g_headless = config.headless;
+    g_fixed_display = config.fixed_display;
     if (config.headless) {
 #ifdef _WIN32
         SDL_SetHint(SDL_HINT_VIDEO_DRIVER, config.vulkan ? "windows" : "offscreen");
@@ -110,7 +115,7 @@ void WindowInit(const WindowConfig &config) {
 
 WindowModeResult WindowSetMode(const WindowConfig &config) {
     WindowModeResult result;
-    if (g_window == nullptr || config.headless) {
+    if (g_window == nullptr || config.headless || g_fixed_display) {
         return result;
     }
     SDL_DisplayID display = SDL_GetDisplayForWindow(g_window);
@@ -169,7 +174,14 @@ void WindowShutdown() {
 SDL_Window *WindowHandle() { return g_window; }
 
 bool WindowSize(int &width, int &height) {
-    return g_window != nullptr && SDL_GetWindowSize(g_window, &width, &height) && width > 0 && height > 0;
+    if (g_window == nullptr) {
+        return false;
+    }
+#ifdef __ANDROID__
+    return SDL_GetWindowSizeInPixels(g_window, &width, &height) && width > 0 && height > 0;
+#else
+    return SDL_GetWindowSize(g_window, &width, &height) && width > 0 && height > 0;
+#endif
 }
 
 bool WindowDisplaySize(int &width, int &height, bool windowed) {
@@ -196,6 +208,8 @@ bool WindowDisplaySize(int &width, int &height, bool windowed) {
     }
     return true;
 }
+
+bool WindowHasFixedDisplay() { return g_fixed_display; }
 
 std::vector<DisplayModeSize> WindowDisplayModes() {
     std::vector<DisplayModeSize> sizes;

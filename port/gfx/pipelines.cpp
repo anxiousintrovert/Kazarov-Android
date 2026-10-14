@@ -660,7 +660,7 @@ void CreatePipelines() {
     std::condition_variable progress;
     uint32_t                workers = std::clamp(std::thread::hardware_concurrency(), 1u, 8u);
     {
-        std::vector<std::jthread> threads;
+        std::vector<std::thread> threads;
         for (uint32_t i = 0; i < workers; i++) {
             threads.emplace_back([&]() {
                 for (uint32_t index = next++; index < total; index = next++) {
@@ -676,6 +676,9 @@ void CreatePipelines() {
                     progress.notify_one();
                 }
             });
+        }
+        for (std::thread &thread : threads) {
+            thread.detach();
         }
         uint32_t reported = UINT32_MAX;
         while (true) {

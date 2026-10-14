@@ -13,7 +13,11 @@
 
 namespace gfx::detail {
 
+#if defined(__ANDROID__)
+inline constexpr uint32_t kFramesInFlight = 3;
+#else
 inline constexpr uint32_t kFramesInFlight = 2;
+#endif
 // Descriptor slots in the bindless array; a handle's low 16 bits are its slot.
 inline constexpr uint32_t kMaxTextures = 8192;
 inline constexpr uint32_t kBaseSamplerCount = 8;
@@ -148,6 +152,11 @@ struct Frame {
     bool                               upload_open = false;
     VkSemaphore                        image_available = VK_NULL_HANDLE;
     VkFence                            fence = VK_NULL_HANDLE;
+#if defined(__ANDROID__)
+    VkQueryPool                        timer_pool = VK_NULL_HANDLE;
+    bool                               timer_recorded = false;
+    bool                               timer_canonical = false;
+#endif
     bool                               pending = false;
     std::vector<TransientChunk>        chunks;
     uint32_t                           chunk = 0;
@@ -266,6 +275,20 @@ struct Context {
     bool                          sampler_anisotropy = false;
     uint32_t                      anisotropy_level = 0;
     PFN_vkCmdSetColorWriteMaskEXT cmd_set_color_write_mask = nullptr;
+#ifdef __ANDROID__
+    PFN_vkCmdPipelineBarrier2 cmd_pipeline_barrier2 = nullptr;
+    PFN_vkQueueSubmit2 queue_submit2 = nullptr;
+    PFN_vkCmdBeginRendering cmd_begin_rendering = nullptr;
+    PFN_vkCmdEndRendering cmd_end_rendering = nullptr;
+    PFN_vkCmdSetCullMode cmd_set_cull_mode = nullptr;
+    PFN_vkCmdSetDepthTestEnable cmd_set_depth_test_enable = nullptr;
+    PFN_vkCmdSetDepthWriteEnable cmd_set_depth_write_enable = nullptr;
+    PFN_vkCmdSetDepthCompareOp cmd_set_depth_compare_op = nullptr;
+    PFN_vkCmdSetStencilTestEnable cmd_set_stencil_test_enable = nullptr;
+    PFN_vkCmdSetPrimitiveTopology cmd_set_primitive_topology = nullptr;
+    PFN_vkCmdSetStencilOp cmd_set_stencil_op = nullptr;
+    PFN_vkCmdSetFrontFace cmd_set_front_face = nullptr;
+#endif
     Swapchain                     swapchain;
     bool                          resize_pending = false;
 
@@ -280,6 +303,8 @@ struct Context {
     Image                main_depth;
     uint32_t             main_current = 0;
     float                render_scale = 1.0f;
+    float                render_scale_factor = 1.0f;
+    bool                 render_scale_pending = false;
     FrameLayout          layout;
     UiAnchor             ui_anchor;
 
